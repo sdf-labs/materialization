@@ -1,0 +1,27 @@
+name: Test Workspace Compilation
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  compile-workspace:
+    runs-on: ubuntu-latest
+    name: Compile SDF Workspace
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run sdf compile
+        uses: sdf-labs/sdf-action@v0
+        id: sdf
+        with:
+          command: 'sdf compile'
+  
+      # Use the output from the `sdf` step
+      - name: Display the sdf output
+        run: |
+          echo "### SDF Run Logs 🪵" >> $GITHUB_STEP_SUMMARY
+          echo '```' >>$GITHUB_STEP_SUMMARY
+          echo "${{ steps.sdf.outputs.log }}" >>$GITHUB_STEP_SUMMARY
+          echo '```' >>$GITHUB_STEP_SUMMARY

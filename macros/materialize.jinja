@@ -1,0 +1,135 @@
+{%- macro gen_table(table_name, query) -%}
+    create or replace table {{ table_name }} as ({{ query }})
+{%- endmacro -%}
+
+{%- macro gen_temporary_table(table_name, query) -%}
+    create or replace temporary table {{ table_name }} as ({{ query }})
+{%- endmacro -%}
+
+{%- macro gen_external_table(table_name, query) -%}
+    create or replace external table {{ table_name }} as ({{ query }})
+{%- endmacro -%}
+
+{%- macro gen_view(table_name, query) -%}
+    create or replace view {{ table_name }} as ({{ query }})
+{%- endmacro -%}
+
+{%- macro gen_materialized_view(table_name, query) -%}
+    create or replace materialized view {{ table_name }} as ({{ query }})
+{%- endmacro -%}
+
+{%- macro gen_incremental_table_append(table_name, query) -%}
+    insert into {{ table_name }} {{ query }}
+{%- endmacro -%}
+
+{%- macro strip_quotes(s) -%}
+    {%- set stripped = s -%}
+    {%- if stripped[0] == '"' and stripped[-1] == '"' -%}
+        {%- set stripped = stripped[1:-1] -%}
+    {%- endif -%}
+    {{ stripped }}
+{%- endmacro -%}
+
+{%- macro gen_incremental_table_merge(table_name, query) -%}
+    {%- set id = builtin.incremental_unique_key -%}
+    {%- set update_cols = builtin.incremental_merge_update_columns -%}
+    {%- set exclude_cols = builtin.incremental_merge_exclude_columns -%}
+    {%- set all_cols = __get_filtered_columns_in_relation__(table_name, []) -%}
+    {%- set ns = namespace(cols_to_update = [], assignments = []) -%}
+    {%- if update_cols == [] -%}
+        {%- set ns.cols_to_update = [] -%}
+        {%- for col in all_cols -%}
+            {%- if col not in exclude_cols and strip_quotes(col) not in exclude_cols -%}
+                {%- set ns.cols_to_update = ns.cols_to_update + [col] -%}
+            {%- endif -%}
+        {%- endfor -%}
+    {%- else -%}
+        {%- set ns.cols_to_update = update_cols -%}
+    {%- endif -%}
+    {%- for col in ns.cols_to_update -%}
+        {%- set ns.assignments = ns.assignments + ["SDF_DEST." + col + " = SDF_SRC." + col] -%}
+    {%- endfor -%}
+    {%- set assignments_str = ns.assignments|join(', ') -%}
+    {%- set insert_cols = all_cols|join(', ') -%}
+    merge into {{ table_name }} as SDF_DEST     -- {{ exclude_cols }}
+        using ({{ query }}) as SDF_SRC
+        on (SDF_SRC.{{id}} = SDF_DEST.{{id}})
+        when matched then update set {{assignments_str}}
+        when not matched then insert ({{insert_cols}})
+        values ({{insert_cols}})
+{%- endmacro -%}
+
+{%- macro gen_incremental_table_delete_insert(table_name, query) -%}
+    {%- set id = builtin.incremental_unique_key -%}
+    {%- set all_cols = __get_filtered_columns_in_relation__(table_name, []) -%}
+    {%- set all_cols_str = all_cols|join(', ') -%}
+    delete from {{ table_name }}
+    where ({{ id }}) in ( select ({{ id }}) from ({{ query }}));
+    insert into {{ table_name }} ({{ all_cols_str }}) (
+        select {{ all_cols_str }} from ({{ query }})
+    );
+{%- endmacro -%}
+
+{%- macro gen_incremental_table(table_name, query) -%}
+    {%- if builtin.incremental_strategy == "append" -%}
+        {{ gen_incremental_table_append(table_name, query) }}
+    {%- elif builtin.incremental_strategy == "merge" -%}
+        {{ gen_incremental_table_merge(table_name, query) }}
+    {%- elif builtin.incremental_strategy == "delete+insert" -%}
+        {{ gen_incremental_table_delete_insert(table_name, query) }}
+    {%- endif -%}
+{%- endmacro -%}
+
+{%- macro select(table_name, query) -%}
+    {%- if builtin.materialization == "table" or (builtin.materialization == "incremental-table" and not builtin.is_incremental_mode) -%}
+        {{ gen_table(table_name, query) }}
+    {%- elif builtin.materialization == "temporary-table" -%}
+        {{ gen_temporary_table(table_name, query) }}
+    {%- elif builtin.materialization == "external-table" -%}
+        {{ gen_external_table(table_name, query) }}
+    {%- elif builtin.materialization == "view" -%}
+        {{ gen_view(table_name, query) }}
+    {%- elif builtin.materialization == "materialized-view" -%}
+        {{ gen_materialized_view(table_name, query) }}
+    {%- elif builtin.materialization == "incremental-table" -%}
+        {# In Snowflake, incremental tables might be managed with Streams or Tasks, but for simplicity, treated as a regular table here #}
+        {{ gen_incremental_table(table_name, query) }}
+    {%- elif builtin.materialization == "recursive-table" -%}
+        {# Snowflake doesn't have a specific 'recursive table' concept; adjust as needed #}
+        {{ gen_table(table_name, query) }}
+    {%- endif -%}
+
+    {# all variables in scope #}
+    -- target: {{ builtin.environment }}
+    -- compute: {{ builtin.compute }}
+    -- dialect: {{ builtin.dialect }}
+    -- schema: {{ builtin.schema }}
+    -- table_name: {{ builtin.table_name }}
+    -- catalog: {{ builtin.catalog }}
+    -- purpose: {{ builtin.purpose }}
+    -- materialization: {{ builtin.materialization }}
+    -- creation_flag: {{ builtin.creation_flag }}
+    -- library: {{ builtin.library }}
+    -- severity: {{ builtin.severity }}
+    -- csv_has_header: {{ builtin.csv_has_header }}
+    -- csv_delimiter: {{ builtin.csv_delimiter }}
+    -- csv_compression: {{ builtin.csv_compression }}
+    -- is_incremental_mode: {{ builtin.is_incremental_mode }}
+{%- endmacro -%}
+
+{# no changes to other statement kinds, rexcpt all names are remapped #}
+{%- macro create_external_table(table_name, query) -%}
+    {{ query }};
+{%- endmacro -%}
+
+{%- macro create_table(table_name, query) -%}
+    {{ query }};
+{%- endmacro -%}
+
+{%- macro create_table_as(table_name, query) -%}
+    {{ query }};
+{%- endmacro -%}
+
+{%- macro insert_into(table_name, query) -%}
+    {{ query }}
+{%- endmacro -%}

@@ -1,0 +1,6 @@
+workspace:
+  name: sdf_mat
+  edition: "1.2"
+  includes:
+    - path: macros/*.jinja
+      type: metadata
