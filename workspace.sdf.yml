@@ -1,6 +1,9 @@
 workspace:
   name: sdf_mat
   edition: "1.2"
+  description: >
+    This library handles the materialization of SDF models. 
+    Check our docs for [all supported materializations](https://docs.sdf.com/reference/sdf-yml#enum-materialization).
   includes:
     - path: macros/*.jinja
       type: metadata
