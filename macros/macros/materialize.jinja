@@ -1,21 +1,51 @@
 {%- macro gen_table(table_name, query) -%}
-    create or replace table {{ table_name }} as ({{ query }})
+    create or replace table {{ table_name }} as ({{ query }});{{ "\n" }}
+{{ gen_comments(table_name) }}
 {%- endmacro -%}
 
 {%- macro gen_temporary_table(table_name, query) -%}
-    create or replace temporary table {{ table_name }} as ({{ query }})
+    create or replace temporary table {{ table_name }} as ({{ query }});{{ "\n" }}
+{{ gen_comments(table_name) }}
 {%- endmacro -%}
 
 {%- macro gen_external_table(table_name, query) -%}
-    create or replace external table {{ table_name }} as ({{ query }})
+    create or replace external table {{ table_name }} as ({{ query }});{{ "\n" }}
+{{ gen_comments(table_name) }}
 {%- endmacro -%}
 
 {%- macro gen_view(table_name, query) -%}
-    create or replace view {{ table_name }} as ({{ query }})
+    create or replace view {{ table_name }} as ({{ query }});{{ "\n" }}
+{{ gen_comments(table_name) }}
 {%- endmacro -%}
 
 {%- macro gen_materialized_view(table_name, query) -%}
-    create or replace materialized view {{ table_name }} as ({{ query }})
+    create or replace materialized view {{ table_name }} as ({{ query }});{{ "\n" }}
+{{ gen_comments(table_name) }}
+{%- endmacro -%}
+
+{%- macro gen_comments(table_name) -%}
+    {%- set table = get_table(table_name) -%}
+    {%- set description = table[0] -%}
+    {%- if description is not none and description != "" -%}
+        {%- set materialization = builtin.materialization -%}
+        {%- if materialization == "view" -%}
+        comment if exists on view {{ table_name }} IS '{{ description }}';{{ "\n" }}
+        {%- else -%}
+        comment if exists on table {{ table_name }} IS '{{ description }}';{{ "\n" }}
+        {%- endif -%}
+    {%- endif -%}
+    {{ gen_column_comments(table_name) }}
+{%- endmacro -%}
+
+{%- macro gen_column_comments(table_name) -%}
+    {%- set columns = get_columns(table_name, []) -%}
+    {%- for column in columns -%}
+        {%- set column_name = column[0] -%}
+        {%- set comment = column[2] -%}
+        {%- if comment is not none and comment != "" -%}
+            comment if exists on column {{ table_name }}.{{ column_name }} IS '{{ comment }}';{{ "\n" }}
+        {%- endif -%}
+    {%- endfor -%}
 {%- endmacro -%}
 
 {%- macro strip_quotes(s) -%}
@@ -52,7 +82,7 @@
 
 {%- macro process_schema_evolution(table_name) -%}
     {%- if builtin.is_incremental_mode or builtin.is_snapshot_mode -%}
-        {%- set old_col_ty_pairs = get_columns_and_types_in_relation(table_name, []) -%}
+        {%- set old_col_ty_pairs = get_columns(table_name, []) -%}
         {%- set new_col_ty_pairs = builtin.inferred_columns_and_types -%}
         {%- set (removed, added, modified) = 
             compare_columns(old_col_ty_pairs, new_col_ty_pairs, builtin.dialect) -%}
@@ -120,6 +150,7 @@
     {%- elif builtin.incremental_strategy == "delete+insert" -%}
         {{ gen_incremental_table_delete_insert(table_name, query) }}
     {%- endif -%}
+{{ gen_comments(table_name) }}
 {%- endmacro -%}
 
 {%- macro gen_snapshot_ts_exp() -%}
