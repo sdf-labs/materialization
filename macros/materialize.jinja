@@ -1,7 +1,7 @@
 {%- macro gen_table(table_name, query) -%}
     create or replace table {{ table_name }} as ({{ query }});{{ "\n" }}
 {{ gen_comments(table_name) }}
-{%- endmacro -%} 
+{%- endmacro -%}
 
 {%- macro gen_temporary_table(table_name, query) -%}
     create or replace temporary table {{ table_name }} as ({{ query }});{{ "\n" }}
