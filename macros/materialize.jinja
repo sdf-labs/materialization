@@ -34,7 +34,9 @@
         comment if exists on table {{ table_name }} IS '{{ description }}';{{ "\n" }}
         {%- endif -%}
     {%- endif -%}
-    {{ gen_column_comments(table_name) }}
+    {%- if materialization != "view" -%}
+        {{ gen_column_comments(table_name) }}
+    {%- endif -%}
 {%- endmacro -%}
 
 {%- macro gen_column_comments(table_name) -%}
