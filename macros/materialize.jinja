@@ -23,6 +23,11 @@
 {{ gen_comments(table_name) }}
 {%- endmacro -%}
 
+{%- macro gen_transient_table(table_name, query) -%}
+    create or replace transient table {{ table_name }} as ({{ query }});{{ "\n" }}
+{{ gen_comments(table_name) }}
+{%- endmacro -%}
+
 {%- macro gen_comments(table_name) -%}
     {%- set table = get_table(table_name) -%}
     {%- set description = table[0] -%}
@@ -332,6 +337,8 @@
     {%- elif builtin.materialization == "recursive-table" -%}
         {# Snowflake doesn't have a specific 'recursive table' concept; adjust as needed #}
         {{ gen_table(table_name, query) }}
+    {%- elif builtin.materialization == "transient-table" -%}
+        {{ gen_transient_table(table_name, query) }}
     {%- endif -%}
 {%- endmacro -%}
 
