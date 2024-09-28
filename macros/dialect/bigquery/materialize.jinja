@@ -308,7 +308,7 @@
     {%- endif -%}
 {%- endmacro -%}
 
-{# no changes to other statement kinds, rexcpt all names are remapped #}
+{# no changes to other statement kinds, except all names are remapped #}
 {%- macro create_external_table(table_name, query) -%}
     {{ query }};
 {%- endmacro -%}

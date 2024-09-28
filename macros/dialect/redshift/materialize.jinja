@@ -34,9 +34,9 @@
     {%- if description is not none and description != "" -%}
         {%- set materialization = builtin.materialization -%}
         {%- if materialization == "view" -%}
-        comment if exists on view {{ table_name }} IS '{{ description }}';{{ "\n" }}
+        comment if exists on view {{ table_name }} IS '{{ description | safe_str }}';{{ "\n" }}
         {%- else -%}
-        comment if exists on table {{ table_name }} IS '{{ description }}';{{ "\n" }}
+        comment if exists on table {{ table_name }} IS '{{ description | safe_str }}';{{ "\n" }}
         {%- endif -%}
     {%- endif -%}
     {%- if materialization != "view" -%}
@@ -50,7 +50,7 @@
         {%- set column_name = column[0] -%}
         {%- set comment = column[2] -%}
         {%- if comment is not none and comment != "" -%}
-            comment if exists on column {{ table_name }}.{{ column_name }} IS '{{ comment }}';{{ "\n" }}
+            comment if exists on column {{ table_name }}.{{ column_name }} IS '{{ comment | safe_str }}';{{ "\n" }}
         {%- endif -%}
     {%- endfor -%}
 {%- endmacro -%}
