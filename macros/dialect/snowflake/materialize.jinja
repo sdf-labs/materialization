@@ -102,7 +102,7 @@
     {%- set new_col_ty_pairs = builtin.inferred_columns_and_types -%}
     {%- set new_cols = new_col_ty_pairs|map(attribute='0') -%}
     {%- set insert_cols = new_cols|join(', ') -%}
-    insert into {{ table_name }} ({{ insert_cols }}) {{ query }}
+    insert into {{ table_name }} ({{ insert_cols }}) {{ query }};{{ "\n" }}
 {%- endmacro -%}
 
 {%- macro gen_incremental_table_merge(table_name, query) -%}
@@ -133,7 +133,7 @@
         on (SDF_SRC.{{id}} = SDF_DEST.{{ id }})
         when matched then update set {{ assignments_str }}
         when not matched then insert ({{ insert_cols }})
-        values ({{ insert_cols }})
+        values ({{ insert_cols }});{{ "\n" }}
 {%- endmacro -%}
 
 {%- macro gen_incremental_table_delete_insert(table_name, query) -%}
@@ -146,7 +146,7 @@
     where ({{ id }}) in ( select ({{ id }}) from ({{ query }}));
     insert into {{ table_name }} ({{ new_cols_str }}) (
         select {{ new_cols_str }} from ({{ query }})
-    );
+    );{{ "\n" }}
 {%- endmacro -%}
 
 {%- macro gen_incremental_table(table_name, query) -%}
