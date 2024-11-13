@@ -384,7 +384,7 @@ create or replace transient table {{ table_name }} as ({{ query }});{{ "\n" }}
     {%- endif -%}
 {%- endmacro -%}
 
-{# no changes to other statement kinds, rexcpt all names are remapped #}
+{# no changes to other statement kinds, except all names are remapped #}
 {%- macro create_external_table(table_name, query) -%}
     {{ gen_set_current_schema_statement() }}
 {{ query }};
