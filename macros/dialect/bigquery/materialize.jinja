@@ -50,7 +50,7 @@
         {%- endfor -%}
     {%- endif -%}
     {%- for (id, ty) in modified -%}
-        alter table {{ table_name }} alter {{ id }} set data type {{ ty }};{{ "\n" }}
+        alter table {{ table_name }} alter column {{ id }} set data type {{ ty }};{{ "\n" }}
     {%- endfor -%}
 {%- endmacro -%}
 
@@ -97,14 +97,15 @@
     {{ process_schema_evolution(table_name) }}
     merge into {{ table_name }} as SDF_DEST
         using ({{ query }}) as SDF_SRC
-        on (SDF_SRC.{{id}} = SDF_DEST.{{ id }})
+        on SDF_SRC.{{id}} = SDF_DEST.{{ id }}
         when matched then update set {{ assignments_str }}
         when not matched then insert ({{ insert_cols }})
         values ({{ insert_cols }});{{ "\n" }}
 {%- endmacro -%}
 
 {%- macro gen_create_temp_table_for_delete_insert(table_name, query) -%}
-    create or replace temporary table {{ table_name }} as ({{ query }});{{ "\n" }}
+    {# temporary tables require a session in BigQuery which SDF does not yet support #}
+    create or replace /* temporary */ table {{ table_name }} as ({{ query }});{{ "\n" }}
 {%- endmacro -%}
 
 {%- macro gen_drop_temp_table_for_delete_insert(table_name) -%}
@@ -140,9 +141,9 @@
 
 {%- macro gen_snapshot_ts_exp() -%}
     {%- if builtin.snapshot_strategy == "timestamp" -%}
-        {{ builtin.snapshot_updated_at }}
+        cast({{ builtin.snapshot_updated_at }} as timestamp)
     {%- else -%}
-        to_timestamp_ntz(convert_timezone('UTC', current_timestamp()))
+        current_timestamp()
     {%- endif -%}
 {%- endmacro -%}
 
@@ -164,7 +165,7 @@
 
 {%- macro gen_snapshot_insert_update_filter() -%}
     {%- if builtin.snapshot_strategy == "timestamp" -%}
-        (snapshotted_data.sdf_valid_from < source_data.{{ builtin.snapshot_updated_at }})
+        (snapshotted_data.sdf_valid_from < cast(source_data.{{ builtin.snapshot_updated_at }} as timestamp))
     {%- elif builtin.snapshot_check_cols == "all" -%}
         {%- set new_col_ty_pairs = builtin.inferred_columns_and_types -%}
         {%- set cols = new_col_ty_pairs|map(attribute='0') -%}
@@ -178,11 +179,12 @@
 {%- macro gen_snapshot_table_init(table_name, query) -%}
     {%- set id = builtin.snapshot_unique_key -%}
     {%- set ts_exp = gen_snapshot_ts_exp() -%}
-    create or replace transient table {{ table_name }} as (
+    {# note: no transient tables in BigQuery #}
+    create or replace /* transient */ table {{ table_name }} as (
         select *,
-            md5(coalesce(cast({{ id }} as varchar), '')
-            || '|' || coalesce(cast({{ ts_exp }} as varchar ), '')
-            ) as sdf_hash,
+            to_hex(md5(coalesce(cast({{ id }} as string), '')
+            || '|' || coalesce(cast({{ ts_exp }} as string), '')
+            )) as sdf_hash,
             {{ ts_exp }} as sdf_updated_at,
             {{ ts_exp }} as sdf_valid_from,
             nullif({{ ts_exp }}, {{ ts_exp }}) as sdf_valid_to
@@ -206,9 +208,9 @@
             {{ updated_at_exp }} as sdf_updated_at,
             {{ updated_at_exp }} as sdf_valid_from,
             nullif({{ updated_at_exp }}, {{ updated_at_exp }}) as sdf_valid_to,
-            md5(coalesce(cast({{ unique_key }} as varchar ), '')
-                || '|' || coalesce(cast({{ updated_at_exp }} as varchar ), '')
-            ) as sdf_hash
+            to_hex(md5(coalesce(cast({{ unique_key }} as string ), '')
+                || '|' || coalesce(cast({{ updated_at_exp }} as string ), '')
+            )) as sdf_hash
         from snapshot_query
     )
 {%- endmacro -%}
@@ -259,7 +261,7 @@
     {%- set insert_update_filter = gen_snapshot_insert_update_filter() -%}
     {%- set new_col_ty_pairs = builtin.inferred_columns_and_types -%}
     {%- set new_cols = new_col_ty_pairs|map(attribute='0') -%}
-    {%- set all_cols = new_cols + ['"SDF_UPDATED_AT"', '"SDF_VALID_FROM"', '"SDF_VALID_TO"', '"SDF_HASH"'] -%}
+    {%- set all_cols = new_cols + ['`SDF_UPDATED_AT`', '`SDF_VALID_FROM`', '`SDF_VALID_TO`', '`SDF_HASH`'] -%}
     {%- set all_cols_str = all_cols|join(', ') -%}
     {{ process_schema_evolution(table_name) }}
     merge into {{ table_name }} as SDF_DEST
