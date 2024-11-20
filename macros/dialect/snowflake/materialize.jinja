@@ -116,10 +116,10 @@ create or replace transient table {{ table_name }} as ({{ query }});{{ "\n" }}
             {# assume table_name ends with _draft#}
             {% set base_table_name = table_name[:-8] %}
         {% endif %}
-        CREATE TABLE {{ table_name }} AS SELECT * FROM {{ base_table_name }};
-        {# CREATE TABLE {{ table_name }} CLONE {{ base_table_name }}; #}
+        {# CREATE TABLE {{ table_name }} AS SELECT * FROM {{ base_table_name }};#}
+        CREATE OR REPLACE TRANSIENT TABLE {{ table_name }} CLONE {{ base_table_name }}; 
 
-    {%- endif -%}
+    {% endif %}
 {% endmacro %}
 
 {%- macro gen_incremental_table_append(table_name, query) -%}
