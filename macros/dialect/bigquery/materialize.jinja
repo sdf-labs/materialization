@@ -64,6 +64,21 @@
     {%- endif -%}
 {%- endmacro -%}
 
+{% macro clone_base_table_if_not_exists(table_name) %}
+    {%- if builtin.is_staging and (builtin.is_incremental_mode or builtin.is_snapshot_mode) and not builtin.exists_draft -%}
+        {% set draft_table_name = table_name %}
+        {% if table_name is endingwith('___draft"') or table_name is endingwith('___DRAFT"') %}
+            {% set base_table_name = table_name[:-9] %}
+        {% else %}
+            {# assume table_name ends with _draft#}
+            {% set base_table_name = table_name[:-8] %}
+        {% endif %}
+        {# CREATE OR REPLACE TABLE {{ table_name }} AS SELECT * FROM {{ base_table_name }};#}
+        DROP TABLE IF EXISTS {{ table_name }};
+        CREATE TABLE {{ table_name }} CLONE {{ base_table_name }};
+    {% endif %}
+{% endmacro %}
+
 {%- macro gen_incremental_table_append(table_name, query) -%}
     {{ process_schema_evolution(table_name) }}
     {%- set new_col_ty_pairs = builtin.inferred_columns_and_types -%}
@@ -130,6 +145,7 @@
 {%- endmacro -%}
 
 {%- macro gen_incremental_table(table_name, query) -%}
+    {{ clone_base_table_if_not_exists(table_name) }}
     {%- if builtin.incremental_strategy == "append" -%}
         {{ gen_incremental_table_append(table_name, query) }}
     {%- elif builtin.incremental_strategy == "merge" -%}
@@ -292,6 +308,7 @@
 
 {%- macro gen_snapshot_table(table_name, query) -%}
     {%- if builtin.is_snapshot_mode -%}
+        {{ clone_base_table_if_not_exists(table_name) }}
         {{ gen_snapshot_table_next(table_name, query) }}
     {%- else -%}
         {{ gen_snapshot_table_init(table_name, query) }}
